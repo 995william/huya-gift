@@ -1,0 +1,90 @@
+name: 虎牙每日助手
+
+on:
+  schedule:
+    # 每天定时执行：cron "10 23 * * *"（Actions 为 UTC 23:10，对应北京时间 07:10）
+    - cron: "10 23 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 运行版本
+        type: choice
+        options: [v2, v1]
+        default: v2
+      room_url:
+        description: 目标主播直播间地址（如 https://www.huya.com/123456）
+        type: string
+        default: ""
+      gift_count:
+        description: 送虎粮个数（0 为全部）
+        type: string
+        default: "0"
+      daka:
+        description: 执行每日打卡
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+      welfare:
+        description: 领取每日 10 虎粮（仅 v2）
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+      wechat_push:
+        description: 推送企业微信报告
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 安装 V1 浏览器
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.version == 'v1') || (github.event_name != 'workflow_dispatch' && vars.HUYA_VERSION == 'v1') }}
+        run: |
+          playwright install --with-deps chromium
+
+      - name: 检查 Python 语法
+        run: |
+          python -m compileall -q .
+
+      - name: 执行每日任务
+        env:
+          HUYA_VERSION: ${{ inputs.version || vars.HUYA_VERSION || 'v2' }}
+          HUYA_ROOM_URL: ${{ inputs.room_url || vars.HUYA_ROOM_URL || secrets.HUYA_ROOM_URL || '' }}
+          HUYA_GIFT_COUNT: ${{ inputs.gift_count || vars.HUYA_GIFT_COUNT || '0' }}
+          HUYA_DAKA: ${{ inputs.daka || vars.HUYA_DAKA || 'true' }}
+          HUYA_WELFARE: ${{ inputs.welfare || vars.HUYA_WELFARE || 'true' }}
+          HUYA_WECHAT_PUSH: ${{ inputs.wechat_push || vars.HUYA_WECHAT_PUSH || 'true' }}
+          HUYA_LOCAL_DEBUG: "false"
+          HUYA_COOKIE: ${{ secrets.HUYA_COOKIE }}
+          HUYA_ACCOUNT: ${{ secrets.HUYA_ACCOUNT }}
+          HUYA_PASSWORD: ${{ secrets.HUYA_PASSWORD }}
+          WX_WEBHOOK: ${{ secrets.WX_WEBHOOK }}
+        run: python main.py
+
+      - name: 上传异常截图
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: screenshots/
+          if-no-files-found: ignore

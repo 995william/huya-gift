@@ -1,0 +1,24 @@
+name: 仓库活跃状态保活服务
+
+on:
+  workflow_dispatch: # 支持手动触发保活
+  schedule:
+    # 每隔 25 天的凌晨 0 点运行一次 (UTC)，保持仓库处于活跃状态
+    - cron: "0 0 */25 * *"
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive_job:
+    name: 仓库活跃状态保活
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+
+      - name: 执行工作流自动保活
+        uses: gautamkrishnar/keepalive-workflow@v2
+        with:
+          use_api: true
