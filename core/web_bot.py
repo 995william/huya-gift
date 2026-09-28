@@ -291,6 +291,7 @@ class HuyaWebBotV1:
                     result["success"] = True
                     result["status"] = "已打卡"
                     result["detail"] = "今日已完成打卡（亲密度已加）"
+                    result["intimacy"] = 5
                 else:
                     daka_btn = task_item.locator("a, button, [class*='Btn']").first
                     if daka_btn.is_visible():
@@ -300,6 +301,7 @@ class HuyaWebBotV1:
                         result["success"] = True
                         result["status"] = "打卡成功"
                         result["detail"] = "网页端打卡成功（亲密度+5）"
+                        result["intimacy"] = 5
             else:
                 log("WARN", "未捕获到打卡任务项浮层")
                 result["detail"] = "未捕获到打卡浮层"
@@ -448,6 +450,7 @@ class HuyaWebBotV1:
                     daka_res = self.web_punch_card()
                     summary["daka_success"] = daka_res.get("success", False)
                     summary["daka_detail"] = daka_res.get("detail", "")
+                    summary["daka_intimacy"] = daka_res.get("intimacy", 5 if summary["daka_success"] else 0)
                     if daka_res.get("fans_level"):
                         summary["fans_level"] = daka_res["fans_level"]
                     if daka_res.get("badge_name"):
@@ -459,11 +462,20 @@ class HuyaWebBotV1:
                 else:
                     summary["daka_success"] = True
                     summary["daka_detail"] = "配置跳过打卡"
+                    summary["daka_intimacy"] = 0
 
                 gift_res = self.web_send_tiger_food()
                 summary["gift_success"] = gift_res.get("success", False)
                 summary["gift_detail"] = gift_res.get("detail", "")
+                summary["gift_count"] = gift_res.get("count", 0)
                 summary["left_count"] = gift_res.get("left_count")
+
+                # 今日亲密度 = 打卡亲密度 + 送虎粮个数 (直接从打卡和送礼接口读取并计算)
+                daka_intimacy = summary.get("daka_intimacy", 0)
+                gift_intimacy = summary.get("gift_count", 0)
+                summary["today_score"] = str(daka_intimacy + gift_intimacy)
+                summary["today_quota"] = "4000"
+
                 summary["all_success"] = summary["daka_success"] and summary["gift_success"]
         finally:
             self._close_browser()

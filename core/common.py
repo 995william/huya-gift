@@ -73,15 +73,17 @@ def make_progress_bar(current: int, total: int, length: int = 8) -> Tuple[str, s
     return bar_str, percent_str
 
 
-def clean_daka_summary(detail: str, success: bool) -> str:
+def clean_daka_summary(detail: str, success: bool, intimacy: int = 0) -> str:
     """精简打卡状态文字，适配移动端单行不折行."""
     if not detail or "跳过" in detail:
         return "跳过打卡"
+    pt = intimacy if intimacy > 0 else 5
     if any(k in detail for k in ("无需重复", "已完成", "已打卡", "已签")):
-        return "打卡成功 (+5)"
+        return f"打卡成功 (+{pt})"
     if success or "成功" in detail:
         m = re.search(r"\+(\d+)", detail)
-        pt = m.group(1) if m else "5"
+        if m:
+            pt = int(m.group(1))
         return f"打卡成功 (+{pt})"
     return detail[:8] if detail else "打卡异常"
 
@@ -97,17 +99,19 @@ def clean_welfare_summary(detail: str, success: bool) -> str:
     return detail[:8] if detail else "暂不可领"
 
 
-def clean_gift_summary(detail: str, success: bool) -> str:
-    """精简送礼状态文字，适配移动端单行不折行."""
+def clean_gift_summary(detail: str, success: bool, count: int = 0) -> str:
+    """精简送礼状态文字，显示本次送出的虎粮情况而非送后库存现状."""
+    if count > 0:
+        return f"已送 {count} 个"
+    if "成功送出" in detail or (success and "送出" in detail):
+        m = re.search(r"送出\s*(\d+)", detail)
+        if m and int(m.group(1)) > 0:
+            return f"已送 {m.group(1)} 个"
     if not detail or "跳过" in detail or "未赠送" in detail:
         return "未赠送"
-    if "暂无" in detail or ("0" in detail and ("库存" in detail or "余粮" in detail)):
+    if any(k in detail for k in ("暂无", "无虎粮", "库存为 0", "库存为0", "无余粮")):
         return "无余粮跳过"
-    if "成功送出" in detail or success:
-        m = re.search(r"送出\s*(\d+)", detail)
-        cnt = m.group(1) if m else "1"
-        return f"成功送出 {cnt} 个"
-    return detail[:8] if detail else "赠送异常"
+    return detail[:8] if detail else "未赠送"
 
 
 def parse_cookie(cookie_text: str) -> Dict[str, str]:
@@ -253,14 +257,16 @@ def build_report_text(summary: Dict[str, Any]) -> str:
     # 今日执行明细
     details = []
     daka_raw = summary.get("daka_detail", "未执行")
-    details.append(("签到", clean_daka_summary(daka_raw, summary.get("daka_success", False))))
+    daka_intimacy = summary.get("daka_intimacy", 0)
+    details.append(("签到", clean_daka_summary(daka_raw, summary.get("daka_success", False), daka_intimacy)))
 
     welfare_raw = summary.get("welfare_detail")
     if welfare_raw and welfare_raw != "跳过福利":
         details.append(("福利", clean_welfare_summary(welfare_raw, summary.get("welfare_success", False))))
 
     gift_raw = summary.get("gift_detail", "未执行")
-    details.append(("送礼", clean_gift_summary(gift_raw, summary.get("gift_success", False))))
+    gift_count = summary.get("gift_count", 0)
+    details.append(("送礼", clean_gift_summary(gift_raw, summary.get("gift_success", False), gift_count)))
 
     left_count = summary.get("left_count")
     if left_count is not None:

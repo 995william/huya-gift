@@ -492,6 +492,7 @@ class HuyaMobileBotV2:
                 result["success"] = True
                 result["status"] = "今日已打卡"
                 result["detail"] = "今日已经完成粉丝团打卡，无需重复领取"
+                result["intimacy"] = 5
                 log("SUCCESS", result["detail"])
                 return result
 
@@ -509,12 +510,13 @@ class HuyaMobileBotV2:
                         if observed_add >= sign_res.intimacy_add:
                             break
 
-            add_pt = observed_add or sign_res.intimacy_add
+            add_pt = observed_add or sign_res.intimacy_add or 5
             detail_str = f"打卡成功（亲密度+{add_pt}，状态复查已确认）"
             log("SUCCESS", f"🎉 WUP 移动端打卡成功！{detail_str}")
             result["success"] = True
             result["status"] = "打卡成功"
             result["detail"] = detail_str
+            result["intimacy"] = add_pt
         except Exception as e:
             log("ERROR", f"WUP 移动端打卡抛出异常: {e}")
             result["detail"] = f"打卡异常: {e}"
@@ -727,14 +729,18 @@ class HuyaMobileBotV2:
                 daka_res = self.mobile_punch_card()
                 summary["daka_success"] = daka_res.get("success", False)
                 summary["daka_detail"] = daka_res.get("detail", "")
+                summary["daka_intimacy"] = daka_res.get("intimacy", 5 if summary["daka_success"] else 0)
             else:
                 summary["daka_success"] = True
                 summary["daka_detail"] = "配置跳过打卡"
+                summary["daka_intimacy"] = 0
 
             if self.do_welfare:
                 welfare_res = self.claim_mobile_welfare()
                 summary["welfare_success"] = welfare_res.get("success", False)
                 summary["welfare_detail"] = welfare_res.get("detail", "")
+                if welfare_res.get("success") and welfare_res.get("item_count", 0) > 0:
+                    time.sleep(1)
             else:
                 summary["welfare_success"] = True
                 summary["welfare_detail"] = "配置跳过福利"
@@ -742,6 +748,7 @@ class HuyaMobileBotV2:
             gift_res = self.send_tiger_food()
             summary["gift_success"] = gift_res.get("success", False)
             summary["gift_detail"] = gift_res.get("detail", "")
+            summary["gift_count"] = gift_res.get("count", 0)
             summary["left_count"] = gift_res.get("left_count")
 
             badge_info = self.query_badge_wup()
@@ -752,8 +759,12 @@ class HuyaMobileBotV2:
             raw = badge_info.get("raw") or {}
             summary["current_score"] = raw.get("current_score")
             summary["next_score"] = raw.get("next_score")
-            summary["today_score"] = str(badge_info.get("today_score", ""))
-            summary["today_quota"] = str(badge_info.get("quota_score", ""))
+
+            # 今日亲密度 = 打卡亲密度 + 送虎粮个数 (直接读取接口返回信息计算，保证准确)
+            daka_intimacy = summary.get("daka_intimacy", 0)
+            gift_intimacy = summary.get("gift_count", 0)
+            summary["today_score"] = str(daka_intimacy + gift_intimacy)
+            summary["today_quota"] = str(badge_info.get("quota_score", 4000) or 4000)
 
             summary["all_success"] = all((
                 summary["daka_success"],
