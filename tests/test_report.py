@@ -163,5 +163,16 @@ class TestReportLogic(unittest.TestCase):
         self.assertIn("├ 送礼：已送 5 个", report)
         self.assertIn("└ 余量：15 个", report)
 
+    def test_wup_signal_code_compatibility(self):
+        from core.wup import HuyaWupClient
+        from core.mobile_bot import PackageGiftClient
+
+        # 当网关未下发 SIGNAL_SERVICE_RET 时，应安全返回 "0"
+        self.assertEqual(HuyaWupClient._signal_code({10: {}}), "0")
+        self.assertEqual(PackageGiftClient._signal_code({10: {}}), "0")
+        # 当网关显式下发非 0 状态码时，应准确识别为错误码
+        self.assertEqual(HuyaWupClient._signal_code({10: {"SIGNAL_SERVICE_RET": "1001"}}), "1001")
+        self.assertEqual(PackageGiftClient._signal_code({10: {"SIGNAL_SERVICE_RET": "1001"}}), "1001")
+
 if __name__ == "__main__":
     unittest.main()

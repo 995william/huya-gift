@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
@@ -126,26 +127,32 @@ def parse_cookie(cookie_text: str) -> Dict[str, str]:
 
 def load_cookie_from_files(cookie_file: str = "huya_cookie.txt") -> str:
     """从本地文件尝试加载已保存的 Cookie 字符串."""
-    if cookie_file and os.path.exists(cookie_file):
-        try:
-            with open(cookie_file, "r", encoding="utf-8") as f:
-                c = f.read().strip()
-                if c:
-                    return c
-        except Exception:
-            pass
+    candidate_txts = [cookie_file]
+    if cookie_file and not os.path.isabs(cookie_file):
+        candidate_txts.append(os.path.join("tools", cookie_file))
 
-    if os.path.exists("huya_cookies.json"):
-        try:
-            with open("huya_cookies.json", "r", encoding="utf-8") as f:
-                cookies_list = json.load(f)
-                return "; ".join([
-                    f"{c['name']}={c['value']}"
-                    for c in cookies_list
-                    if "huya.com" in c.get("domain", "")
-                ])
-        except Exception:
-            pass
+    for path in candidate_txts:
+        if path and os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    c = f.read().strip()
+                    if c:
+                        return c
+            except Exception:
+                pass
+
+    for json_path in ["huya_cookies.json", os.path.join("tools", "huya_cookies.json")]:
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    cookies_list = json.load(f)
+                    return "; ".join([
+                        f"{c['name']}={c['value']}"
+                        for c in cookies_list
+                        if "huya.com" in c.get("domain", "")
+                    ])
+            except Exception:
+                pass
     return ""
 
 
@@ -170,12 +177,15 @@ def fetch_room_metadata_http(room_url: str) -> Dict[str, Any]:
     }
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept-Language": "zh-CN,zh;q=0.9",
         }
         req = urllib.request.Request(room_url, headers=headers)
         with urllib.request.urlopen(req, timeout=8) as resp:
-            content = resp.read().decode("utf-8", errors="ignore")
+            raw = resp.read()
+            if raw[:3] == b"\x1f\x8b\x08":
+                raw = gzip.decompress(raw)
+            content = raw.decode("utf-8", errors="ignore")
 
         m_lp = re.search(r'"lp"\s*:\s*"?(\d+)"?', content)
         m_gid = re.search(r'"gid"\s*:\s*"?(\d+)"?', content)

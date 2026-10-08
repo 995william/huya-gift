@@ -3,8 +3,8 @@ __pycache__/
 *$py.class
 *.so
 .env
-huya_cookie.txt
-huya_cookies.json
+*huya_cookie*.txt
+*huya_cookie*.json
 screenshots/
 .idea/
 .vscode/

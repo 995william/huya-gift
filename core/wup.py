@@ -342,7 +342,11 @@ class HuyaWupClient:
     @staticmethod
     def _signal_code(root: Dict[int, Any]) -> str:
         status = root.get(10, {})
-        return str(status.get("SIGNAL_SERVICE_RET", "")) if isinstance(status, dict) else ""
+        if isinstance(status, dict) and "SIGNAL_SERVICE_RET" in status:
+            val = str(status.get("SIGNAL_SERVICE_RET", "")).strip()
+            if val:
+                return val
+        return "0"
 
     def query_fans_sign(self, pid: int) -> FansSignStatus:
         """查询当天粉丝团打卡状态，不产生打卡副作用。"""

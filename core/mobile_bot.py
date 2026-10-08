@@ -160,10 +160,10 @@ class DailyTigerFoodClient(HuyaWupClient):
     def _signal_status(root: dict[int, Any]) -> tuple[str, str]:
         status = root.get(10, {})
         if not isinstance(status, dict):
-            return "", ""
-        return str(status.get("SIGNAL_SERVICE_RET", "")), str(
-            status.get("STATUS_RESULT_DESC", "")
-        )
+            return "0", ""
+        code = str(status.get("SIGNAL_SERVICE_RET", "")).strip() or "0"
+        desc = str(status.get("STATUS_RESULT_DESC", ""))
+        return code, desc
 
     def query_welfare(self, pid: int) -> WelfareStatus:
         out = JceOutputStream()
@@ -242,7 +242,11 @@ class PackageGiftClient(HuyaWupClient):
     @staticmethod
     def _signal_code(root: dict[int, Any]) -> str:
         status = root.get(10, {})
-        return str(status.get("SIGNAL_SERVICE_RET", "")) if isinstance(status, dict) else ""
+        if isinstance(status, dict) and "SIGNAL_SERVICE_RET" in status:
+            val = str(status.get("SIGNAL_SERVICE_RET", "")).strip()
+            if val:
+                return val
+        return "0"
 
     def query_tiger_food(self, pid: int) -> PackageInventory:
         out = JceOutputStream()
@@ -395,6 +399,8 @@ class HuyaMobileBotV2:
         self.cookie_str = self.config["COOKIE"] or load_cookie_from_files(
             self.config["COOKIE_FILE"]
         )
+        if not self.account and self.cookie_str:
+            self.account = parse_cookie(self.cookie_str).get("username", "")
         self.gift_count = self.config["GIFT_COUNT"]
         self.do_daka = self.config["DO_DAKA"]
         self.do_welfare = self.config["DO_WELFARE"]
@@ -420,7 +426,7 @@ class HuyaMobileBotV2:
             if inventory.signal_code != "0":
                 log(
                     "ERROR",
-                    f"Cookie WUP 校验失败（协议码 {inventory.signal_code or '缺失'}）。",
+                    f"Cookie WUP 校验失败（协议码 {inventory.signal_code or '缺失'}，Cookie 可能已过期失效）。",
                 )
                 return False
             log(
@@ -429,7 +435,7 @@ class HuyaMobileBotV2:
             )
             return True
         except Exception as exc:
-            log("ERROR", f"Cookie WUP 校验异常: {exc}")
+            log("ERROR", f"Cookie WUP 校验异常（Cookie 可能已过期失效）: {exc}")
             self.wup_client = None
             self.welfare_client = None
             self.package_client = None
