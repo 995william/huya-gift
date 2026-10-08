@@ -1,4 +1,4 @@
-name: 仓库活跃状态保活服务
+name: 仓库状态保活
 
 on:
   workflow_dispatch: # 支持手动触发保活
