@@ -1,24 +1,28 @@
 name: 仓库状态保活
 
 on:
-  workflow_dispatch: # 支持手动触发保活
   schedule:
-    # 每隔 25 天的凌晨 0 点运行一次 (UTC)，保持仓库处于活跃状态
-    - cron: "0 0 */25 * *"
+    # 每月 1 号与 15 号凌晨 00:00 (UTC) 定时保活
+    - cron: "0 0 1,15 * *"
+  workflow_dispatch: # 支持手动一键触发测试
 
 permissions:
   contents: write
 
 jobs:
   keepalive_job:
-    name: 仓库活跃状态保活
+    name: 保持 Actions 活跃
     runs-on: ubuntu-latest
 
     steps:
       - name: 检出仓库代码
         uses: actions/checkout@v4
 
-      - name: 执行工作流自动保活
-        uses: gautamkrishnar/keepalive-workflow@v2
-        with:
-          use_api: true
+      - name: 自动保活心跳提交
+        run: |
+          date > keepalive.txt
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add keepalive.txt
+          git commit -m "chore: 定时保活自动心跳 [skip ci]" || echo "No changes"
+          git push
