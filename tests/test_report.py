@@ -197,13 +197,14 @@ class TestReportLogic(unittest.TestCase):
 
         client = PackageGiftClient("yyuid=123; guid=test_guid")
         # 模拟 WUP 成功返回：tag 0 为礼物列表，每个 gift 的 tag 0 为 simple_info (tag 1: "虎粮", tag 0: 4)
+        # 模拟真实 WUP 响应：simple_info tag 0=道具ID(4)，tag 1=整数 100，tag 3="虎粮"，外层 tag 5=库存
         mock_root = {10: {"SIGNAL_SERVICE_RET": "0"}}
         mock_response = {
             "tRsp": {
                 0: {
                     0: [
                         {
-                            0: {0: 4, 1: "虎粮", 3: 1729000000},
+                            0: {0: 4, 1: 100, 3: "虎粮"},
                             5: 10,  # 数量
                         }
                     ]

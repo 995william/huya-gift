@@ -245,13 +245,12 @@ class PackageGiftClient(HuyaWupClient):
         out = JceOutputStream()
         out.write_struct_begin(0)
         out.write_long(self.uid, 0)
-        out.write_string(self.guid, 1)
-        out.write_string(os.getenv("HUYA_UDB_TOKEN", "").strip(), 2)
+        # 与官方 webPackageV2 页面一致：sGuid/sToken 为空，Cookie 去空格，iTokenType=0
+        out.write_string("", 1)
+        out.write_string("", 2)
         out.write_string(self.WEB_UA, 3)
         out.write_string(self.clean_cookie, 4)
         out.write_int(0, 5)
-        out.write_string(os.getenv("HUYA_DEVICE_MODEL", "").strip(), 6)
-        out.write_string(os.getenv("HUYA_QIMEI", "").strip(), 7)
         out.write_struct_end()
         return out.get_bytes()
 
@@ -283,8 +282,16 @@ class PackageGiftClient(HuyaWupClient):
             simple_info = gift.get(0, {})
             if not isinstance(simple_info, dict):
                 continue
-            item_name = str(simple_info.get(1, "") or simple_info.get(3, ""))
-            if "虎粮" in item_name:
+            # 真实响应中道具名称位于 tag 3（tag 1 为整数），兼容两个 tag 的字符串取值
+            item_name = next(
+                (
+                    value
+                    for value in (simple_info.get(3), simple_info.get(1))
+                    if isinstance(value, str) and "虎粮" in value
+                ),
+                "",
+            )
+            if item_name:
                 item_count = int(gift.get(5, 0) or simple_info.get(5, 0))
                 return PackageInventory(
                     signal_code=signal_code,
@@ -441,19 +448,18 @@ class HuyaMobileBotV2:
             self.package_client = PackageGiftClient(self.cookie_str)
             inventory = self.package_client.query_tiger_food(self.pid)
             if inventory.signal_code != "0":
-                # 尝试二次使用打卡/勋章接口校验登录状态，避免包裹接口因特殊原因单点误报
-                badge_probe = self.wup_client.query_badge_info(self.pid)
-                sign_probe = self.wup_client.query_fans_sign(self.pid)
-                if sign_probe.signal_code != "0" and badge_probe is None:
-                    log(
-                        "ERROR",
-                        f"Cookie WUP 校验失败（包裹协议码 {inventory.signal_code or '缺失'}，打卡协议码 {sign_probe.signal_code or '缺失'}，Cookie 可能已过期失效）。",
-                    )
-                    return False
-                log(
-                    "WARN",
-                    f"包裹查询协议码异常 ({inventory.signal_code})，但打卡/勋章协议连接正常，继续执行。",
+                # 勋章查询接口无需鉴权，不能用于判断登录态；905 即 UserId/Cookie 鉴权失败
+                hint = (
+                    "网关返回 905（UserId/Cookie 鉴权失败），HUYA_COOKIE 已失效，"
+                    "请运行 tools/get_cookie.py 重新获取并更新 Secret"
+                    if inventory.signal_code == "905"
+                    else "Cookie 可能已过期失效"
                 )
+                log(
+                    "ERROR",
+                    f"Cookie WUP 校验失败（协议码 {inventory.signal_code or '缺失'}，{hint}）。",
+                )
+                return False
             log(
                 "SUCCESS",
                 f"Cookie WUP 协议验证成功！(UID: {self.wup_client.uid}，虎粮库存: {inventory.count})",

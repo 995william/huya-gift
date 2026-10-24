@@ -8,3 +8,4 @@ __pycache__/
 screenshots/
 .idea/
 .vscode/
+.venv/
