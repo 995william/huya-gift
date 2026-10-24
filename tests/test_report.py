@@ -217,6 +217,20 @@ class TestReportLogic(unittest.TestCase):
         self.assertEqual(inv.item_type, 4)
         self.assertEqual(inv.count, 10)
 
+    def test_daily_tiger_food_client_user_id_encoding(self):
+        from core.mobile_bot import DailyTigerFoodClient
+        from core.wup import JceInputStream
+
+        # 测试当仅提供标准 Cookie 时，自动提取 guid，无 token 时 token_type 默认为 0
+        client = DailyTigerFoodClient("yyuid=123456; guid=my_guid_abc")
+        parsed = JceInputStream(client.user_id_bytes).parse_all()
+        user_id = parsed.get(0, {})
+        self.assertEqual(user_id.get(0), 123456)
+        self.assertEqual(user_id.get(1), "my_guid_abc")
+        self.assertEqual(user_id.get(2), "")
+        self.assertEqual(user_id.get(5), 0)  # 无 token 默认为 0 (Cookie 登录)
+        self.assertEqual(client.ua, user_id.get(3))  # 请求头 huya_ua 与包体内 UA 一致
+
 
 if __name__ == "__main__":
     unittest.main()

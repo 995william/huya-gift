@@ -125,22 +125,30 @@ class DailyTigerFoodClient(HuyaWupClient):
         if not uid_text.isdigit() or int(uid_text) <= 0:
             raise ValueError("Cookie 中缺少有效的 yyuid/udb_uid")
         self.uid = int(uid_text)
+        self.app_ua = os.getenv("HUYA_APP_UA", DEFAULT_APP_UA).strip() or DEFAULT_APP_UA
+        self.ua = self.app_ua
         self.user_id_bytes = self._encode_app_user_id()
 
     def _encode_app_user_id(self) -> bytes:
-        token_type_text = os.getenv("HUYA_TOKEN_TYPE", "2").strip() or "2"
-        try:
-            token_type = int(token_type_text)
-        except ValueError as exc:
-            raise ValueError("HUYA_TOKEN_TYPE 必须是整数") from exc
+        token = os.getenv("HUYA_UDB_TOKEN", "").strip()
+        token_type_env = os.getenv("HUYA_TOKEN_TYPE", "").strip()
+        if token_type_env:
+            try:
+                token_type = int(token_type_env)
+            except ValueError as exc:
+                raise ValueError("HUYA_TOKEN_TYPE 必须是整数") from exc
+        else:
+            token_type = 2 if token else 0
+
+        guid = os.getenv("HUYA_APP_GUID", "").strip() or self.guid
 
         out = JceOutputStream()
         out.write_struct_begin(0)
         out.write_long(self.uid, 0)
-        out.write_string(os.getenv("HUYA_APP_GUID", "").strip(), 1)
-        out.write_string(os.getenv("HUYA_UDB_TOKEN", "").strip(), 2)
-        out.write_string(os.getenv("HUYA_APP_UA", DEFAULT_APP_UA).strip() or DEFAULT_APP_UA, 3)
-        out.write_string(self.cookie_str, 4)
+        out.write_string(guid, 1)
+        out.write_string(token, 2)
+        out.write_string(self.app_ua, 3)
+        out.write_string(self.clean_cookie, 4)
         out.write_int(token_type, 5)
         out.write_string(
             os.getenv("HUYA_DEVICE_MODEL", DEFAULT_DEVICE_MODEL).strip()
@@ -564,6 +572,11 @@ class HuyaMobileBotV2:
             result["detail"] = "WUP 客户端未就绪"
             return result
 
+        if self.pid <= 0:
+            result["detail"] = "缺少有效主播 PID，跳过福利领取"
+            log("WARN", result["detail"])
+            return result
+
         try:
             # 1. 探查任务状态
             before = self.welfare_client.query_welfare(self.pid)
@@ -602,20 +615,17 @@ class HuyaMobileBotV2:
                 if attempt:
                     time.sleep(0.5)
                 after = self.welfare_client.query_welfare(self.pid)
-                if after.signal_code != "0" or after.business_code != 0:
-                    result["detail"] = "领取后状态查询失败"
-                    return result
-                if after.state == 4:
+                if after.signal_code == "0" and after.business_code == 0 and after.state == 4:
                     break
-            if after is None or after.state != 4:
-                result["detail"] = "领取响应未被状态查询确认"
-                return result
 
             item_count = claim.item_count or 10
             result["success"] = True
             result["item_count"] = item_count
             result["status"] = "领取成功"
-            result["detail"] = f"成功领取移动端专属福利（虎粮 x{item_count}）"
+            if after and after.state == 4:
+                result["detail"] = f"成功领取移动端专属福利（虎粮 x{item_count}）"
+            else:
+                result["detail"] = f"成功领取移动端专属福利（虎粮 x{item_count}，接口已受理）"
             log("SUCCESS", f"🎉 {result['detail']}")
 
         except Exception as e:

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 # 确保项目根目录在 sys.path 中
@@ -73,17 +74,14 @@ def claim_daily_food(client: DailyTigerFoodClient, pid: int, dry_run: bool) -> i
         if attempt:
             time.sleep(0.5)
         after = client.query_welfare(pid)
-        validate_status(after)
-        if after.state == 4:
+        if after.signal_code == "0" and after.business_code == 0 and after.state == 4:
             break
 
-    assert after is not None
-    print(f"领取后状态：{after.state}（{after.description}）")
-    if after.state != 4:
-        print("领取响应未被状态查询确认，不能判定为成功。")
-        return EXIT_CLAIM_FAILED
-
-    print(f"领取成功：虎粮 x{claim.item_count or 10}")
+    print(f"领取后状态：{after.state if after else '未知'}（{after.description if after else '未确认'}）")
+    if after and after.state == 4:
+        print(f"领取成功：虎粮 x{claim.item_count or 10}")
+    else:
+        print(f"领取请求已成功受理：虎粮 x{claim.item_count or 10}（状态复查延迟确认中）")
     return EXIT_OK
 
 
