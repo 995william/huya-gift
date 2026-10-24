@@ -799,10 +799,15 @@ class HuyaMobileBotV2:
             summary["current_score"] = raw.get("current_score")
             summary["next_score"] = raw.get("next_score")
 
-            # 今日亲密度 = 打卡亲密度 + 送虎粮个数 (直接读取接口返回信息计算，保证准确)
+            # 今日亲密度：以接口返回的当日累计值（跨多次运行累加，仅含送礼所得）为准，
+            # 再补上今日打卡的 +5；接口不可用时才退化为仅统计本次运行。
             daka_intimacy = summary.get("daka_intimacy", 0)
-            gift_intimacy = summary.get("gift_count", 0)
-            summary["today_score"] = str(daka_intimacy + gift_intimacy)
+            if badge_info.get("raw"):
+                api_today = int(badge_info.get("today_score") or 0)
+                summary["today_score"] = str(api_today + daka_intimacy)
+            else:
+                gift_intimacy = summary.get("gift_count", 0)
+                summary["today_score"] = str(daka_intimacy + gift_intimacy)
             summary["today_quota"] = str(badge_info.get("quota_score", 4000) or 4000)
 
             summary["all_success"] = all((

@@ -124,18 +124,35 @@ class TestReportLogic(unittest.TestCase):
         bot.query_badge_wup = MagicMock(return_value={
             "fans_level": "Lv.22", "badge_name": "楚河", "need_intimacy": "7183",
             "intimacy_progress": "167817/175000", "quota_score": 4000,
+            "today_score": 10,  # 接口返回的当日累计（仅送礼）
             "raw": {"current_score": 167817, "next_score": 175000}
         })
         bot.wechat_push = False
 
         summary = bot.execute()
         self.assertEqual(summary["gift_count"], 10)
-        self.assertEqual(summary["today_score"], "15")  # 5 打卡 + 10 送粮 = 15
+        self.assertEqual(summary["today_score"], "15")  # 接口累计 10 + 打卡 5 = 15
 
         report = build_report_text(summary)
         self.assertIn("🔥 今日：15 / 4000", report)
         self.assertIn("├ 送礼：已送 10 个", report)
         self.assertIn("└ 余量：0 个", report)
+
+        # 同一天第二次运行再送 20：今日应累计为 30(接口) + 5(打卡)，而非仅本次的 25
+        bot.send_tiger_food = MagicMock(return_value={
+            "success": True, "status": "赠送成功", "detail": "成功送出 20 个虎粮（库存 20 → 0）",
+            "count": 20, "left_count": 0
+        })
+        bot.query_badge_wup = MagicMock(return_value={
+            "fans_level": "Lv.22", "badge_name": "楚河", "need_intimacy": "7163",
+            "intimacy_progress": "167837/175000", "quota_score": 4000,
+            "today_score": 30,
+            "raw": {"current_score": 167837, "next_score": 175000}
+        })
+        summary = bot.execute()
+        self.assertEqual(summary["gift_count"], 20)
+        self.assertEqual(summary["today_score"], "35")
+        self.assertIn("🔥 今日：35 / 4000", build_report_text(summary))
 
     def test_web_bot_execute_calculation(self):
         from unittest.mock import MagicMock
