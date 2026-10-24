@@ -157,12 +157,23 @@ class DailyTigerFoodClient(HuyaWupClient):
         out.write_struct_end()
 
     @staticmethod
-    def _signal_status(root: dict[int, Any]) -> tuple[str, str]:
+    def _signal_status(root: dict[int, Any], rsp_dict: Optional[dict[str, Any]] = None) -> tuple[str, str]:
         status = root.get(10, {})
-        if not isinstance(status, dict):
-            return "0", ""
-        code = str(status.get("SIGNAL_SERVICE_RET", "")).strip() or "0"
-        desc = str(status.get("STATUS_RESULT_DESC", ""))
+        code = "0"
+        desc = ""
+        if isinstance(status, dict):
+            code = str(status.get("SIGNAL_SERVICE_RET", "")).strip() or "0"
+            desc = str(status.get("STATUS_RESULT_DESC", ""))
+            if code == "0" and desc:
+                m = re.search(r"execption:(\d+)", desc)
+                if m:
+                    code = m.group(1)
+        if code == "0" and rsp_dict and isinstance(rsp_dict, dict):
+            empty_val = rsp_dict.get("")
+            if isinstance(empty_val, dict) and 0 in empty_val:
+                ret_code = empty_val[0]
+                if isinstance(ret_code, int) and ret_code != 0:
+                    code = str(ret_code)
         return code, desc
 
     def query_welfare(self, pid: int) -> WelfareStatus:
@@ -174,7 +185,7 @@ class DailyTigerFoodClient(HuyaWupClient):
         out.write_struct_end()
 
         root, response = self._send_wup("wupui", "queryFansGroupTaskInfo", out.get_bytes())
-        signal_code, _ = self._signal_status(root)
+        signal_code, _ = self._signal_status(root, response)
         response_wrapper = response.get("tRsp", {})
         payload = response_wrapper.get(0, {}) if isinstance(response_wrapper, dict) else {}
         day_welfare = payload.get(7, {}) if isinstance(payload, dict) else {}
@@ -193,7 +204,7 @@ class DailyTigerFoodClient(HuyaWupClient):
         out.write_struct_end()
 
         root, response = self._send_wup("wupui", "operateFansBox", out.get_bytes())
-        signal_code, signal_description = self._signal_status(root)
+        signal_code, signal_description = self._signal_status(root, response)
         response_wrapper = response.get("tRsp", {})
         payload = response_wrapper.get(0, {}) if isinstance(response_wrapper, dict) else {}
         business_code = payload.get(0) if isinstance(payload, dict) else None
@@ -226,11 +237,13 @@ class PackageGiftClient(HuyaWupClient):
         out = JceOutputStream()
         out.write_struct_begin(0)
         out.write_long(self.uid, 0)
-        out.write_string("", 1)
-        out.write_string("", 2)
+        out.write_string(self.guid, 1)
+        out.write_string(os.getenv("HUYA_UDB_TOKEN", "").strip(), 2)
         out.write_string(self.WEB_UA, 3)
-        out.write_string(self.cookie_str, 4)
+        out.write_string(self.clean_cookie, 4)
         out.write_int(0, 5)
+        out.write_string(os.getenv("HUYA_DEVICE_MODEL", "").strip(), 6)
+        out.write_string(os.getenv("HUYA_QIMEI", "").strip(), 7)
         out.write_struct_end()
         return out.get_bytes()
 
@@ -240,13 +253,8 @@ class PackageGiftClient(HuyaWupClient):
         out.write_struct_end()
 
     @staticmethod
-    def _signal_code(root: dict[int, Any]) -> str:
-        status = root.get(10, {})
-        if isinstance(status, dict) and "SIGNAL_SERVICE_RET" in status:
-            val = str(status.get("SIGNAL_SERVICE_RET", "")).strip()
-            if val:
-                return val
-        return "0"
+    def _signal_code(root: dict[int, Any], rsp_dict: Optional[dict[str, Any]] = None) -> str:
+        return HuyaWupClient._signal_code(root, rsp_dict)
 
     def query_tiger_food(self, pid: int) -> PackageInventory:
         out = JceOutputStream()
@@ -256,7 +264,7 @@ class PackageGiftClient(HuyaWupClient):
         out.write_struct_end()
 
         root, response = self._send_wup("wupui", "getPackageGift", out.get_bytes())
-        signal_code = self._signal_code(root)
+        signal_code = self._signal_code(root, response)
         response_wrapper = response.get("tRsp", {})
         payload = response_wrapper.get(0, {}) if isinstance(response_wrapper, dict) else {}
         gifts = payload.get(0, []) if isinstance(payload, dict) else []
@@ -267,13 +275,14 @@ class PackageGiftClient(HuyaWupClient):
             simple_info = gift.get(0, {})
             if not isinstance(simple_info, dict):
                 continue
-            item_name = str(simple_info.get(3, ""))
-            if item_name == "虎粮":
+            item_name = str(simple_info.get(1, "") or simple_info.get(3, ""))
+            if "虎粮" in item_name:
+                item_count = int(gift.get(5, 0) or simple_info.get(5, 0))
                 return PackageInventory(
                     signal_code=signal_code,
                     item_type=int(simple_info.get(0, 0)),
-                    item_name=item_name,
-                    count=int(gift.get(5, 0)),
+                    item_name=item_name or "虎粮",
+                    count=item_count,
                 )
 
         return PackageInventory(
@@ -301,7 +310,7 @@ class PackageGiftClient(HuyaWupClient):
         out.write_struct_end()
 
         root, response = self._send_wup("sequenceui", "getSequence", out.get_bytes())
-        signal_code = self._signal_code(root)
+        signal_code = self._signal_code(root, response)
         response_wrapper = response.get("tRsp", {})
         payload = response_wrapper.get(0, {}) if isinstance(response_wrapper, dict) else {}
         ret_code = int(payload.get(0, -1)) if isinstance(payload, dict) else -1
@@ -380,7 +389,7 @@ class PackageGiftClient(HuyaWupClient):
         response_wrapper = response.get("tRsp", {})
         payload = response_wrapper.get(0, {}) if isinstance(response_wrapper, dict) else {}
         return GiftSendResponse(
-            signal_code=self._signal_code(root),
+            signal_code=self._signal_code(root, response),
             pay_code=int(payload.get(0, -1)) if isinstance(payload, dict) else -1,
             item_type=int(payload.get(1, 0)) if isinstance(payload, dict) else 0,
             item_count=int(payload.get(2, 0)) if isinstance(payload, dict) else 0,
@@ -424,11 +433,19 @@ class HuyaMobileBotV2:
             self.package_client = PackageGiftClient(self.cookie_str)
             inventory = self.package_client.query_tiger_food(self.pid)
             if inventory.signal_code != "0":
+                # 尝试二次使用打卡/勋章接口校验登录状态，避免包裹接口因特殊原因单点误报
+                badge_probe = self.wup_client.query_badge_info(self.pid)
+                sign_probe = self.wup_client.query_fans_sign(self.pid)
+                if sign_probe.signal_code != "0" and badge_probe is None:
+                    log(
+                        "ERROR",
+                        f"Cookie WUP 校验失败（包裹协议码 {inventory.signal_code or '缺失'}，打卡协议码 {sign_probe.signal_code or '缺失'}，Cookie 可能已过期失效）。",
+                    )
+                    return False
                 log(
-                    "ERROR",
-                    f"Cookie WUP 校验失败（协议码 {inventory.signal_code or '缺失'}，Cookie 可能已过期失效）。",
+                    "WARN",
+                    f"包裹查询协议码异常 ({inventory.signal_code})，但打卡/勋章协议连接正常，继续执行。",
                 )
-                return False
             log(
                 "SUCCESS",
                 f"Cookie WUP 协议验证成功！(UID: {self.wup_client.uid}，虎粮库存: {inventory.count})",

@@ -4,6 +4,10 @@
 from . import common
 from . import wup
 from . import mobile_bot
-from . import web_bot
+
+try:
+    from . import web_bot
+except ImportError:
+    web_bot = None
 
 __all__ = ["common", "wup", "mobile_bot", "web_bot"]

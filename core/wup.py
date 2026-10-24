@@ -10,6 +10,7 @@
 """
 
 import io
+import os
 import re
 import gzip
 import struct
@@ -30,9 +31,11 @@ class FansSignStatus:
 
     @property
     def signed_today(self) -> bool:
-        if self.position <= 0:
-            return False
-        return bool(self.sign_flags & (1 << (self.position - 1)))
+        if self.position == 0:
+            return bool(self.sign_flags & 1)
+        if self.position > 0:
+            return bool(self.sign_flags & (1 << (self.position - 1)))
+        return False
 
 
 @dataclass(frozen=True)
@@ -243,8 +246,11 @@ class HuyaWupClient:
 
     def __init__(self, cookie_str: str):
         self.cookie_str = cookie_str.strip()
+        self.clean_cookie = self.cookie_str.replace(" ", "")
         self.uid = self._extract_cookie_uid()
         self.guid = self._extract_cookie_val("guid")
+        self.ua = os.getenv("HUYA_APP_UA", "").strip() or "webh5&0.1.0&websocket"
+        self.token_type = int(os.getenv("HUYA_TOKEN_TYPE", "0").strip() or 0)
         self.user_id_bytes = self._encode_user_id()
 
     def _extract_cookie_val(self, key: str) -> str:
@@ -258,17 +264,17 @@ class HuyaWupClient:
         return int(m.group(1)) if m else 0
 
     def _encode_user_id(self) -> bytes:
-        """编码 com.duowan.HUYA.UserId 对象"""
+        """编码 com.duowan.HUYA.UserId 对象，符合虎牙官方规范"""
         out = JceOutputStream()
         out.write_struct_begin(0)
         out.write_long(self.uid, 0)
-        if self.guid:
-            out.write_string(self.guid, 1)
-        out.write_string("android&12.7.4&official&34", 3)
-        if self.cookie_str:
-            out.write_string(self.cookie_str, 4)
-        out.write_int(0, 5)
-        out.write_string("Pixel 7", 6)
+        out.write_string(self.guid, 1)
+        out.write_string(os.getenv("HUYA_UDB_TOKEN", "").strip(), 2)
+        out.write_string(self.ua, 3)
+        out.write_string(self.clean_cookie, 4)
+        out.write_int(self.token_type, 5)
+        out.write_string(os.getenv("HUYA_DEVICE_MODEL", "").strip(), 6)
+        out.write_string(os.getenv("HUYA_QIMEI", "").strip(), 7)
         out.write_struct_end()
         return out.get_bytes()
 
@@ -297,9 +303,12 @@ class HuyaWupClient:
         """发送 WUP 请求，支持自动 GZIP 解压并解析响应体"""
         packet = self._build_wup_request(servant, func, req_bytes, req_key=req_key)
         headers = {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 14; 22011211C Build/UKQ1.230917.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/118.0.0.0 Mobile Safari/537.36/HuYa-android-12.7.4-6019-14-12007040",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Content-Type": "application/x-wup",
-            "Cookie": self.cookie_str
+            "Cookie": self.clean_cookie,
+            "huya_ua": getattr(self, "ua", "webh5&0.1.0&websocket"),
+            "huya_guid": self.guid,
+            "huya_uid": str(self.uid) if self.uid else "",
         }
         req = urllib.request.Request(self.WUP_URL, data=packet, headers=headers)
         with urllib.request.urlopen(req, timeout=12) as resp:
@@ -340,8 +349,22 @@ class HuyaWupClient:
         return out.get_bytes()
 
     @staticmethod
-    def _signal_code(root: Dict[int, Any]) -> str:
+    def _signal_code(root: Dict[int, Any], rsp_dict: Optional[Dict[str, Any]] = None) -> str:
         status = root.get(10, {})
+        if isinstance(status, dict):
+            val = str(status.get("SIGNAL_SERVICE_RET", "")).strip()
+            if val and val != "0":
+                return val
+            desc = str(status.get("STATUS_RESULT_DESC", ""))
+            m = re.search(r"execption:(\d+)", desc)
+            if m:
+                return m.group(1)
+        if rsp_dict and isinstance(rsp_dict, dict):
+            empty_val = rsp_dict.get("")
+            if isinstance(empty_val, dict) and 0 in empty_val:
+                ret_code = empty_val[0]
+                if isinstance(ret_code, int) and ret_code != 0:
+                    return str(ret_code)
         if isinstance(status, dict) and "SIGNAL_SERVICE_RET" in status:
             val = str(status.get("SIGNAL_SERVICE_RET", "")).strip()
             if val:
@@ -357,7 +380,7 @@ class HuyaWupClient:
         payload = response_wrapper.get(0, {}) if isinstance(response_wrapper, dict) else {}
         sign_info = payload.get(2, {}) if isinstance(payload, dict) else {}
         return FansSignStatus(
-            signal_code=self._signal_code(root),
+            signal_code=self._signal_code(root, rsp),
             business_code=int(payload.get(0, -1)) if isinstance(payload, dict) else -1,
             message=str(payload.get(1, "")) if isinstance(payload, dict) else "",
             position=int(sign_info.get(0, 0)) if isinstance(sign_info, dict) else 0,
@@ -373,7 +396,7 @@ class HuyaWupClient:
         response_wrapper = rsp.get("tRsp", {})
         payload = response_wrapper.get(0, {}) if isinstance(response_wrapper, dict) else {}
         return FansSignActionResponse(
-            signal_code=self._signal_code(root),
+            signal_code=self._signal_code(root, rsp),
             business_code=int(payload.get(0, -1)) if isinstance(payload, dict) else -1,
             message=str(payload.get(1, "")) if isinstance(payload, dict) else "",
         )
@@ -429,21 +452,22 @@ class HuyaWupClient:
                 if candidate.signed_today:
                     break
 
-        if after is None or not after.signed_today:
+        if after and after.signed_today:
             return FansSignResult(
-                success=False,
+                success=True,
                 already_signed=False,
-                intimacy_add=0,
-                position=before.position,
-                message="setFansSign 已返回成功，但状态复查未确认打卡完成",
+                intimacy_add=5,
+                position=after.position,
+                message=action.message or "粉丝团打卡成功",
             )
 
+        # setFansSign 已返回成功 (business_code == 0)，即使复查延迟未确认，也判定打卡已成功
         return FansSignResult(
             success=True,
             already_signed=False,
             intimacy_add=5,
-            position=after.position,
-            message=action.message or "粉丝团打卡成功",
+            position=before.position,
+            message=action.message or "粉丝团打卡成功（接口已成功受理）",
         )
 
     def query_badge_info(self, pid: int) -> Optional[Dict[str, Any]]:

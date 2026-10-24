@@ -20,7 +20,11 @@ import argparse
 import urllib.request
 from datetime import datetime
 from typing import Dict, Any, Optional
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+try:
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+except ImportError:
+    sync_playwright = None
+    PlaywrightTimeoutError = Exception
 
 # 确保 Windows 终端标准输出编码正常
 if sys.platform.startswith("win"):
@@ -96,6 +100,10 @@ class HuyaWebBotV1:
 
     def _init_browser(self):
         """初始化 Chromium 浏览器上下文"""
+        if sync_playwright is None:
+            raise RuntimeError(
+                "运行 v1 网页版需要安装 playwright：请执行 pip install playwright 并运行 playwright install chromium"
+            )
         if self.browser:
             return
         if not self.playwright:

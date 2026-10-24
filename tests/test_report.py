@@ -173,6 +173,50 @@ class TestReportLogic(unittest.TestCase):
         # 当网关显式下发非 0 状态码时，应准确识别为错误码
         self.assertEqual(HuyaWupClient._signal_code({10: {"SIGNAL_SERVICE_RET": "1001"}}), "1001")
         self.assertEqual(PackageGiftClient._signal_code({10: {"SIGNAL_SERVICE_RET": "1001"}}), "1001")
+        # 当网关在 STATUS_RESULT_DESC 下发 905 异常时，应准确识别
+        gateway_err = {10: {"STATUS_RESULT_DESC": "wup request biz execption:905"}}
+        self.assertEqual(HuyaWupClient._signal_code(gateway_err), "905")
+        self.assertEqual(PackageGiftClient._signal_code(gateway_err), "905")
+
+    def test_fans_sign_sunday_and_flags(self):
+        from core.wup import FansSignStatus
+
+        # position = 0 代表周日，测试未打卡 (sign_flags & 1 == 0) 与已打卡 (sign_flags & 1 == 1)
+        status_sunday_uncheck = FansSignStatus("0", 0, "ok", 0, 0, 0)
+        self.assertFalse(status_sunday_uncheck.signed_today)
+        status_sunday_checked = FansSignStatus("0", 0, "ok", 0, 0, 1)
+        self.assertTrue(status_sunday_checked.signed_today)
+
+        # position = 1 代表周一，测试打卡位
+        status_monday_checked = FansSignStatus("0", 0, "ok", 1, 0, 1)
+        self.assertTrue(status_monday_checked.signed_today)
+
+    def test_package_tiger_food_parsing(self):
+        from unittest.mock import MagicMock
+        from core.mobile_bot import PackageGiftClient
+
+        client = PackageGiftClient("yyuid=123; guid=test_guid")
+        # 模拟 WUP 成功返回：tag 0 为礼物列表，每个 gift 的 tag 0 为 simple_info (tag 1: "虎粮", tag 0: 4)
+        mock_root = {10: {"SIGNAL_SERVICE_RET": "0"}}
+        mock_response = {
+            "tRsp": {
+                0: {
+                    0: [
+                        {
+                            0: {0: 4, 1: "虎粮", 3: 1729000000},
+                            5: 10,  # 数量
+                        }
+                    ]
+                }
+            }
+        }
+        client._send_wup = MagicMock(return_value=(mock_root, mock_response))
+        inv = client.query_tiger_food(123456)
+        self.assertEqual(inv.signal_code, "0")
+        self.assertEqual(inv.item_name, "虎粮")
+        self.assertEqual(inv.item_type, 4)
+        self.assertEqual(inv.count, 10)
+
 
 if __name__ == "__main__":
     unittest.main()
