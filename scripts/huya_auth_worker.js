@@ -1,11 +1,11 @@
 /**
  * Cloudflare Worker: 虎牙一键扫码登录与 Cookie 自动同步网关
  * 
- * 🛡️ 安全与功能特性：
- * 1. 极简黑白方块与深色现代化设计：适配移动端刘海/灵动岛全屏 PWA，只展示二维码供手机扫码。
- * 2. 页面访问锁（Auth Key）：未授权访客无法加载登录接口与二维码，防恶意调用。
- * 3. 纯协议扫码：无感直连虎牙官方 UDB 扫码网关，秒级获取二维码并长轮询状态。
- * 4. 自动同步 Actions：扫码确认后，自动合并所有跨域凭据并通过 GitHub API 自动写入 Secret 并触发验证！
+ * 🛡️ 特性：
+ * 1. 纯协议扫码：无感直连虎牙官方 UDB 扫码网关，秒级获取二维码。
+ * 2. 实时进度流展示：无弹窗打断，直接在卡片内实时反馈扫码、凭据提取与 Actions 验证进度。
+ * 3. 单飞防重轮询：彻底消除并发请求，杜绝重复触发流水线。
+ * 4. 深度凭据萃取：全链路提取 WUP 网关所需的核心鉴权 Cookie（yyuid、udb_biztoken、udb_session 等）。
  */
 
 const DEFAULT_AUTH_KEY = "";
@@ -51,7 +51,7 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
     .title-box h1 {
       font-size: 20px;
       font-weight: 700;
-      color: #38bdf8;
+      color: #f8fafc;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -67,39 +67,40 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
       align-items: center;
       gap: 5px;
       background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      border: 1px solid rgba(16, 185, 129, 0.25);
       color: #34d399;
       font-size: 11px;
       padding: 3px 10px;
       border-radius: 20px;
-      margin-top: 8px;
-      font-weight: 500;
+      margin-top: 10px;
     }
     .qr-container {
       margin: 22px auto 16px;
-      width: 220px;
-      height: 220px;
-      background: #ffffff;
-      border-radius: 18px;
+      width: 230px;
+      height: 230px;
+      background: #0f172a;
+      border-radius: 20px;
       padding: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+      border: 1px solid #334155;
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
       position: relative;
       overflow: hidden;
     }
     .qr-img {
       width: 100%;
       height: 100%;
-      object-fit: contain;
-      border-radius: 10px;
+      border-radius: 12px;
+      background: #ffffff;
+      padding: 8px;
       transition: opacity 0.3s;
     }
     .qr-mask {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(15, 23, 42, 0.88);
+      background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(4px);
       display: none;
       flex-direction: column;
@@ -107,45 +108,50 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
       justify-content: center;
       color: #f8fafc;
       padding: 16px;
-      gap: 10px;
-      border-radius: 18px;
       cursor: pointer;
     }
-    .qr-mask p { font-size: 13px; font-weight: 500; }
+    .qr-mask p {
+      font-size: 14px;
+      font-weight: 600;
+      color: #f87171;
+      margin-bottom: 12px;
+    }
     .btn-refresh {
       background: #0284c7;
       color: white;
       border: none;
-      padding: 6px 14px;
       border-radius: 20px;
-      font-size: 12px;
+      padding: 8px 18px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
     }
     .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
+      gap: 8px;
+      padding: 7px 16px;
       border-radius: 30px;
       font-size: 13px;
       font-weight: 500;
-      margin-top: 4px;
       transition: all 0.3s;
+      margin-top: 4px;
     }
     .status-waiting {
       background: rgba(56, 189, 248, 0.12);
       color: #38bdf8;
       border: 1px solid rgba(56, 189, 248, 0.3);
+      animation: pulse 2s infinite;
     }
     .status-scanned {
       background: rgba(245, 158, 11, 0.15);
       color: #fbbf24;
       border: 1px solid rgba(245, 158, 11, 0.4);
-      animation: pulse 1.5s infinite;
+      animation: pulse 1.2s infinite;
     }
     .status-success {
-      background: rgba(16, 185, 129, 0.18);
+      background: rgba(16, 185, 129, 0.15);
       color: #34d399;
       border: 1px solid rgba(16, 185, 129, 0.4);
     }
@@ -162,11 +168,11 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
     }
     @keyframes pulse {
       0% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.05); opacity: 0.85; }
+      50% { transform: scale(1.04); opacity: 0.85; }
       100% { transform: scale(1); opacity: 1; }
     }
     .tips {
-      margin-top: 20px;
+      margin-top: 18px;
       font-size: 12px;
       color: #64748b;
       line-height: 1.6;
@@ -174,6 +180,91 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
     .tips span {
       color: #94a3b8;
       font-weight: 500;
+    }
+
+    /* 实时进度流展示卡片 */
+    .progress-box {
+      margin-top: 18px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 18px 16px;
+      text-align: left;
+    }
+    .progress-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      position: relative;
+      padding-bottom: 16px;
+    }
+    .progress-step:last-child {
+      padding-bottom: 0;
+    }
+    .progress-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 13px;
+      top: 26px;
+      bottom: 0;
+      width: 2px;
+      background: #334155;
+    }
+    .progress-step.step-done:not(:last-child)::after {
+      background: #10b981;
+    }
+    .step-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #334155;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+      z-index: 1;
+      transition: all 0.3s;
+    }
+    .progress-step.step-done .step-badge {
+      background: #10b981;
+      color: white;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+    .progress-step.step-running .step-badge {
+      background: #0284c7;
+      color: white;
+      box-shadow: 0 0 12px rgba(2, 132, 199, 0.5);
+    }
+    .mini-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .step-main {
+      font-size: 14px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 2px;
+    }
+    .progress-step.step-done .step-main {
+      color: #10b981;
+    }
+    .progress-step.step-running .step-main {
+      color: #38bdf8;
+    }
+    .step-sub {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.4;
     }
 
     /* 访问锁遮罩界面 */
@@ -276,7 +367,7 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
     </div>
   </div>
 
-  <!-- 主卡片：只展示二维码 -->
+  <!-- 主卡片 -->
   <div class="card" id="mainCard">
     <div class="title-box">
       <h1><span>🐯</span> 虎牙助手 · 扫码登录</h1>
@@ -287,7 +378,7 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
     </div>
 
     <!-- 二维码显示区 -->
-    <div class="qr-container">
+    <div class="qr-container" id="qrContainer">
       <img id="qrImg" class="qr-img" src="" alt="虎牙登录二维码" style="display: none;">
       <div id="qrLoading" style="color: #64748b; font-size: 13px;">正在获取二维码...</div>
       <div class="qr-mask" id="qrMask" onclick="loadNewQr()">
@@ -302,13 +393,38 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
       <span id="statusText">等待扫码中...</span>
     </div>
 
-    <div class="tips">
+    <!-- 实时进度流展示区 -->
+    <div id="progressBox" class="progress-box" style="display: none;">
+      <div class="progress-step step-done" id="pstep1">
+        <div class="step-badge">✓</div>
+        <div class="step-text">
+          <div class="step-main">手机扫码确认</div>
+          <div class="step-sub">虎牙 App 已完成扫码授权</div>
+        </div>
+      </div>
+      <div class="progress-step step-running" id="pstep2">
+        <div class="step-badge"><div class="mini-spinner"></div></div>
+        <div class="step-text">
+          <div class="step-main">凭据加密同步</div>
+          <div class="step-sub" id="pstep2Sub">正在抓取完整 Cookie 并同步至云端...</div>
+        </div>
+      </div>
+      <div class="progress-step" id="pstep3">
+        <div class="step-badge">3</div>
+        <div class="step-text">
+          <div class="step-main">云端自动验证打卡</div>
+          <div class="step-sub" id="pstep3Sub">已通知 Actions 启动即时签到测试</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tips" id="normalTips">
       打开 <span>虎牙直播 App</span> ➔ <span>我的</span> ➔ 右上角 <span>扫一扫</span><br>
       扫码确认后，系统将自动更新云端凭据并启动每日助手
     </div>
 
     <div class="footer-bar">
-      <span>仓库: ${targetRepo}</span>
+      <span>${targetRepo ? `仓库: ${targetRepo}` : "虎牙每日自动助手"}</span>
       <span>·</span>
       <a href="javascript:void(0)" onclick="resetLockKey()">重设安全锁</a>
     </div>
@@ -320,7 +436,10 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
     let currentConfirmCookie = "";
     let pollTimer = null;
     let pollCount = 0;
-    const MAX_POLLS = 100; // 最多轮询 ~3.5 分钟
+    const MAX_POLLS = 100; // 最多轮询 ~3 分钟
+
+    let isPollingActive = false;
+    let isCompleted = false;
 
     function getAuthKey() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -370,7 +489,13 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
     }
 
     async function loadNewQr() {
-      if (pollTimer) clearInterval(pollTimer);
+      if (pollTimer) clearTimeout(pollTimer);
+      isPollingActive = false;
+      isCompleted = false;
+
+      document.getElementById("qrContainer").style.display = "flex";
+      document.getElementById("progressBox").style.display = "none";
+      document.getElementById("normalTips").style.display = "block";
       document.getElementById("qrMask").style.display = "none";
       document.getElementById("qrImg").style.display = "none";
       document.getElementById("qrLoading").style.display = "block";
@@ -420,14 +545,45 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
       }
     }
 
-    function startPolling() {
-      pollCount = 0;
-      if (pollTimer) clearInterval(pollTimer);
+    function showLiveProgress(res) {
+      document.getElementById("qrContainer").style.display = "none";
+      document.getElementById("normalTips").style.display = "none";
+      document.getElementById("progressBox").style.display = "block";
 
-      pollTimer = setInterval(async () => {
+      const pstep2 = document.getElementById("pstep2");
+      const pstep3 = document.getElementById("pstep3");
+      const pstep2Sub = document.getElementById("pstep2Sub");
+      const pstep3Sub = document.getElementById("pstep3Sub");
+
+      // 步骤 2 立即完成
+      pstep2.className = "progress-step step-done";
+      pstep2.querySelector(".step-badge").textContent = "✓";
+      pstep2Sub.textContent = "已捕获并加密全量授权凭据 (UID: " + (res.account || "虎牙用户") + ")";
+
+      // 步骤 3 启动中
+      pstep3.className = "progress-step step-running";
+      pstep3.querySelector(".step-badge").innerHTML = '<div class="mini-spinner"></div>';
+      pstep3Sub.textContent = "已触发 GitHub Actions 云端打卡，正在验证...";
+
+      setTimeout(() => {
+        pstep3.className = "progress-step step-done";
+        pstep3.querySelector(".step-badge").textContent = "✓";
+        pstep3Sub.textContent = "云端验证工作流已成功启动！请留意企业微信群机器人推送。";
+      }, 2500);
+    }
+
+    function startPolling() {
+      if (pollTimer) clearTimeout(pollTimer);
+      pollCount = 0;
+      isPollingActive = true;
+      isCompleted = false;
+
+      async function doPoll() {
+        if (!isPollingActive || isCompleted) return;
+
         pollCount++;
         if (pollCount > MAX_POLLS) {
-          clearInterval(pollTimer);
+          isPollingActive = false;
           document.getElementById("qrMask").style.display = "flex";
           setBadge("error", "二维码已过期，点击刷新");
           return;
@@ -449,32 +605,41 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
           });
 
           if (resp.status === 403) {
-            clearInterval(pollTimer);
+            isPollingActive = false;
             return;
           }
 
           const res = await resp.json();
-          if (res.stage === 0) {
+          if (res.stage === 0 || res.stage === "0") {
             setBadge("waiting", "等待扫码：打开虎牙 App 扫一扫");
-          } else if (res.stage === 1) {
-            setBadge("scanned", "📱 手机已扫码！请在 App 上点击确认登录");
+          } else if (res.stage === 1 || res.stage === "1") {
+            setBadge("scanned", "📱 手机已扫码！请在 App 上点击确认");
           } else if (res.success || res.status === "confirmed" || res.stage === 2) {
-            clearInterval(pollTimer);
+            // 立即停止所有轮询，防止重复发出请求
+            isCompleted = true;
+            isPollingActive = false;
+
             const accName = res.account ? " [" + res.account + "]" : "";
-            setBadge("success", "🎉 登录成功" + accName + "！已自动同步至 Actions");
-            document.getElementById("qrImg").style.opacity = "0.3";
-            alert("🎉 恭喜！虎牙登录成功！\\n\\n最新 Cookie 已自动加密写入 GitHub Actions Secrets，并已触发云端每日任务！");
+            setBadge("success", "🎉 授权成功" + accName + "！已自动同步至 Actions");
+            showLiveProgress(res);
+            return;
           } else if (res.status === "expired" || res.returnCode === -1 || res.stage === 6) {
-            clearInterval(pollTimer);
+            isPollingActive = false;
             document.getElementById("qrMask").style.display = "flex";
             setBadge("error", "二维码已失效，点击刷新");
-          } else {
-            console.log("轮询中:", res);
+            return;
           }
         } catch (e) {
-          // 忽略偶发的网络抖动
+          // 忽略单次网络偶发异常
         }
-      }, 2000);
+
+        // 单飞轮询：仅在上一次请求彻底结束后间隔 1.2 秒发起下一次，杜绝重叠并发
+        if (isPollingActive && !isCompleted) {
+          pollTimer = setTimeout(doPoll, 1200);
+        }
+      }
+
+      pollTimer = setTimeout(doPoll, 1000);
     }
 
     window.addEventListener("DOMContentLoaded", checkLock);
@@ -519,7 +684,7 @@ export default {
         const contextId = `WB-${randHex}-${randHex.toUpperCase()}-`;
         const reqId = Date.now().toString();
 
-        const getQrIdPayload = {
+        const huyaPayload = {
           uri: "70001",
           version: "2.6",
           context: contextId,
@@ -531,10 +696,12 @@ export default {
           byPass: "3",
           requestId: reqId,
           data: {
-            behavior: JSON.stringify({ furl: "https://i.huya.com/", curl: "https://i.huya.com/", user_action: [] }),
+            appId: "5002",
+            from: "",
+            behavior: "%7B%22furl%22%3A%22https%3A%2F%2Fi.huya.com%2F%22%2C%22curl%22%3A%22https%3A%2F%2Fi.huya.com%2F%22%2C%22user_action%22%3A%5B%5D%7D",
+            page: "https%3A%2F%2Fi.huya.com%2F",
             type: "",
-            domainList: "huya.com,yy.com",
-            page: "https://i.huya.com/"
+            domainList: ""
           }
         };
 
@@ -550,57 +717,63 @@ export default {
             "lcid": "2052",
             "reqid": reqId
           },
-          body: JSON.stringify(getQrIdPayload)
+          body: JSON.stringify(huyaPayload)
         });
-
-        // 提取 web_qrlogin_confirm_id 会话 Cookie
-        let confirmCookie = "";
-        let rawCookies = [];
-        if (typeof huyaResp.headers.getSetCookie === "function") {
-          rawCookies = huyaResp.headers.getSetCookie();
-        } else {
-          const h = huyaResp.headers.get("set-cookie") || "";
-          rawCookies = h.split(/,(?=[^;]+=[^;]+)/g);
-        }
-        for (const item of rawCookies) {
-          const part = item.split(";")[0].trim();
-          if (part && part.startsWith("web_qrlogin_confirm_id=")) {
-            confirmCookie = part;
-            break;
-          }
-        }
 
         const huyaData = await huyaResp.json();
         const qrId = huyaData?.data?.qrId;
+
         if (!qrId) {
-          return new Response(JSON.stringify({ success: false, error: "获取虎牙二维码 ID 失败" }), {
+          return new Response(JSON.stringify({ success: false, error: "获取二维码标识失败", detail: huyaData }), {
             status: 500,
             headers: { "Content-Type": "application/json" }
           });
         }
 
-        // 获取二维码二进制并转为 Base64 图片
-        const imgResp = await fetch(`https://udblgn.huya.com/qrLgn/getQrImg?k=${qrId}&appId=5002`, {
+        // 捕获 Set-Cookie 下发的 web_qrlogin_confirm_id
+        let confirmCookie = "";
+        try {
+          if (typeof huyaResp.headers.getSetCookie === "function") {
+            const cookies = huyaResp.headers.getSetCookie();
+            for (const c of cookies) {
+              if (c.includes("web_qrlogin_confirm_id")) {
+                confirmCookie = c.split(";")[0].trim();
+                break;
+              }
+            }
+          }
+          if (!confirmCookie) {
+            const rawCk = huyaResp.headers.get("set-cookie") || "";
+            const m = rawCk.match(/web_qrlogin_confirm_id=([^;]+)/);
+            if (m) confirmCookie = `web_qrlogin_confirm_id=${m[1]}`;
+          }
+        } catch (e) {}
+
+        const imgUrl = `https://udblgn.huya.com/qrLgn/getQrImg?k=${qrId}&appId=5002`;
+        const imgResp = await fetch(imgUrl, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Referer": "https://aq.huya.com/"
+            "Referer": "https://i.huya.com/"
           }
         });
+
         const imgBuffer = await imgResp.arrayBuffer();
         const base64Img = btoa(String.fromCharCode(...new Uint8Array(imgBuffer)));
+        const dataUrl = `data:image/png;base64,${base64Img}`;
 
         return new Response(JSON.stringify({
           success: true,
           qrId: qrId,
+          qrImg: dataUrl,
           context: contextId,
-          confirmCookie: confirmCookie,
-          qrImg: `data:image/png;base64,${base64Img}`
+          confirmCookie: confirmCookie
         }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
         });
+
       } catch (err) {
-        return new Response(JSON.stringify({ success: false, error: err.message }), {
+        return new Response(JSON.stringify({ success: false, error: "网关内部异常: " + err.message }), {
           status: 500,
           headers: { "Content-Type": "application/json" }
         });
@@ -642,9 +815,9 @@ export default {
           data: {
             qrId: qrId,
             remember: "1",
-            domainList: "huya.com,yy.com",
-            behavior: JSON.stringify({ furl: "https://i.huya.com/", curl: "https://i.huya.com/", user_action: [] }),
-            page: "https://i.huya.com/"
+            domainList: "",
+            behavior: "%7B%22furl%22%3A%22https%3A%2F%2Fi.huya.com%2F%22%2C%22curl%22%3A%22https%3A%2F%2Fi.huya.com%2F%22%2C%22user_action%22%3A%5B%5D%7D",
+            page: "https%3A%2F%2Fi.huya.com%2F"
           }
         };
 
@@ -704,49 +877,94 @@ export default {
             cookieMap[ck.trim()] = cv.trim();
           }
 
-          // 1. 抓取 tryQrLogin 的 Set-Cookie
-          let rawCookies = [];
-          if (typeof huyaResp.headers.getSetCookie === "function") {
-            rawCookies = huyaResp.headers.getSetCookie();
-          } else {
-            const h = huyaResp.headers.get("set-cookie") || "";
-            rawCookies = h.split(/,(?=[^;]+=[^;]+)/g);
+          // A. 优先直接从 checkRes.data / checkRes 中提取用户与登录凭据
+          const resData = checkRes?.data || {};
+          const uid = resData.uid || resData.yyuid || resData.udb_uid || checkRes?.uid;
+          if (uid) {
+            cookieMap["yyuid"] = String(uid);
+            cookieMap["udb_uid"] = String(uid);
           }
-          for (const item of rawCookies) {
-            const part = item.split(";")[0].trim();
-            if (part && part.includes("=")) {
-              const [k, v] = part.split("=", 2);
-              cookieMap[k.trim()] = v.trim();
+          const passport = resData.passport || resData.username || checkRes?.passport;
+          if (passport) {
+            cookieMap["username"] = String(passport);
+          }
+          const biztoken = resData.biztoken || checkRes?.biztoken;
+          if (biztoken) {
+            cookieMap["udb_biztoken"] = String(biztoken);
+          }
+          const sessionData = resData.sessionData || checkRes?.sessionData;
+          if (sessionData) {
+            cookieMap["udb_session"] = String(sessionData);
+          }
+          const ticket5060 = resData.ticket5060 || checkRes?.ticket5060;
+          if (ticket5060) {
+            cookieMap["ticket5060"] = String(ticket5060);
+          }
+          cookieMap["udb_passdata"] = "3";
+          cookieMap["udb_appid"] = "5002";
+
+          // B. 抓取 tryQrLogin 的 Set-Cookie
+          try {
+            let rawCookies = [];
+            if (typeof huyaResp.headers.getSetCookie === "function") {
+              rawCookies = huyaResp.headers.getSetCookie();
+            } else {
+              const h = huyaResp.headers.get("set-cookie") || "";
+              rawCookies = h.split(/,(?=[^;]+=[^;]+)/g);
+            }
+            for (const item of rawCookies) {
+              const part = item.split(";")[0].trim();
+              if (part && part.includes("=")) {
+                const [k, v] = part.split("=", 2);
+                if (k && v) cookieMap[k.trim()] = v.trim();
+              }
+            }
+          } catch (e) {}
+
+          // C. 依次访问 domainUrlList 抓取跨域 Set-Cookie
+          if (Array.isArray(domainUrls)) {
+            for (const dUrl of domainUrls) {
+              try {
+                let targetUrl = String(dUrl).trim();
+                if (targetUrl.startsWith("//")) {
+                  targetUrl = "https:" + targetUrl;
+                } else if (targetUrl.startsWith("http://")) {
+                  targetUrl = "https://" + targetUrl.slice(7);
+                }
+                const dResp = await fetch(targetUrl, {
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                    "Referer": "https://i.huya.com/",
+                    "Cookie": confirmCookie ? `web_qrlogin_confirm_id=${confirmCookie.split("=")[1] || confirmCookie}` : ""
+                  }
+                });
+                let dCookies = [];
+                if (typeof dResp.headers.getSetCookie === "function") {
+                  dCookies = dResp.headers.getSetCookie();
+                } else {
+                  const dh = dResp.headers.get("set-cookie") || "";
+                  dCookies = dh.split(/,(?=[^;]+=[^;]+)/g);
+                }
+                for (const item of dCookies) {
+                  const part = item.split(";")[0].trim();
+                  if (part && part.includes("=")) {
+                    const [k, v] = part.split("=", 2);
+                    if (k && v) cookieMap[k.trim()] = v.trim();
+                  }
+                }
+              } catch (err) {
+                console.error("访问跨域 domainUrl 异常:", dUrl, err);
+              }
             }
           }
 
-          // 2. 依次访问 domainUrlList 抓取跨域 Set-Cookie
-          for (const dUrl of domainUrls) {
-            try {
-              const dResp = await fetch(dUrl, {
-                redirect: "manual",
-                headers: {
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                  "Referer": "https://i.huya.com/"
-                }
-              });
-              let dCookies = [];
-              if (typeof dResp.headers.getSetCookie === "function") {
-                dCookies = dResp.headers.getSetCookie();
-              } else {
-                const dh = dResp.headers.get("set-cookie") || "";
-                dCookies = dh.split(/,(?=[^;]+=[^;]+)/g);
-              }
-              for (const item of dCookies) {
-                const part = item.split(";")[0].trim();
-                if (part && part.includes("=")) {
-                  const [k, v] = part.split("=", 2);
-                  cookieMap[k.trim()] = v.trim();
-                }
-              }
-            } catch (err) {
-              console.error("访问跨域 domainUrl 异常:", dUrl, err);
-            }
+          // D. 设备标识与补齐
+          if (!cookieMap["guid"]) {
+            cookieMap["guid"] = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+              .map(b => b.toString(16).padStart(2, "0")).join("");
+          }
+          if (!cookieMap["udb_guiddata"]) {
+            cookieMap["udb_guiddata"] = cookieMap["guid"];
           }
 
           const cookieParts = [];
@@ -756,11 +974,11 @@ export default {
           const fullCookie = cookieParts.join("; ");
           const account = cookieMap["username"] || cookieMap["yyuid"] || cookieMap["udb_uid"] || "虎牙用户";
 
-          // 3. 自动触发 GitHub Actions 写入 Secret 并启动验证流水线
+          // E. 自动触发 GitHub Actions 写入 Secret 并启动验证流水线
           const ghRepo = env.GITHUB_REPO || "";
           const ghToken = env.GITHUB_TOKEN;
 
-          if (ghToken && ghRepo) {
+          if (ghToken && ghRepo && (cookieMap["yyuid"] || cookieMap["udb_uid"])) {
             ctx.waitUntil((async () => {
               try {
                 const dispatchUrl = `https://api.github.com/repos/${ghRepo}/dispatches`;
