@@ -412,8 +412,8 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
       <div class="progress-step" id="pstep3">
         <div class="step-badge">3</div>
         <div class="step-text">
-          <div class="step-main">云端自动验证打卡</div>
-          <div class="step-sub" id="pstep3Sub">已通知 Actions 启动即时签到测试</div>
+          <div class="step-main">云端执行当日全量任务</div>
+          <div class="step-sub" id="pstep3Sub">已通知 Actions 启动打卡并送出全部虎粮...</div>
         </div>
       </div>
     </div>
@@ -563,12 +563,12 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
       // 步骤 3 启动中
       pstep3.className = "progress-step step-running";
       pstep3.querySelector(".step-badge").innerHTML = '<div class="mini-spinner"></div>';
-      pstep3Sub.textContent = "已触发 GitHub Actions 云端打卡，正在验证...";
+      pstep3Sub.textContent = "已触发 GitHub Actions 云端流水线，执行当日全部任务...";
 
       setTimeout(() => {
         pstep3.className = "progress-step step-done";
         pstep3.querySelector(".step-badge").textContent = "✓";
-        pstep3Sub.textContent = "云端验证工作流已成功启动！请留意企业微信群机器人推送。";
+        pstep3Sub.textContent = "当日全部任务已成功在云端启动！请留意企业微信群机器人推送。";
       }, 2500);
     }
 

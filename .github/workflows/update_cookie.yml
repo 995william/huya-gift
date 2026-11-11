@@ -1,4 +1,4 @@
-name: 自动更新 Cookie 并执行验证签到
+name: 自动更新 Cookie 并执行当日全部任务
 
 on:
   repository_dispatch:
@@ -14,9 +14,9 @@ permissions:
 
 jobs:
   sync_cookie_job:
-    name: 同步最新 Cookie 并在云端验证
+    name: 同步最新 Cookie 并执行全量任务
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: 检出仓库代码
@@ -40,11 +40,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: python scripts/sync_cookie_secret.py
 
-      - name: 执行即时签到与验证任务 (送1粮)
+      - name: 执行当日全量任务 (送出全部虎粮)
         env:
           HUYA_VERSION: "v2"
           HUYA_ROOM_URL: ${{ vars.HUYA_ROOM_URL || secrets.HUYA_ROOM_URL || '' }}
-          HUYA_GIFT_COUNT: "1"
+          HUYA_GIFT_COUNT: "0"
           HUYA_DAKA: "true"
           HUYA_WELFARE: "true"
           HUYA_WECHAT_PUSH: "true"
