@@ -463,7 +463,7 @@ function renderWebAppHtml(targetRepo = "", defaultKey = DEFAULT_AUTH_KEY) {
             const accName = res.account ? " [" + res.account + "]" : "";
             setBadge("success", "🎉 登录成功" + accName + "！已自动同步至 Actions");
             document.getElementById("qrImg").style.opacity = "0.3";
-            alert("🎉 恭喜！虎牙登录成功！\n\n最新 Cookie 已自动加密写入 GitHub Actions Secrets，并已触发云端每日任务！");
+            alert("🎉 恭喜！虎牙登录成功！\\n\\n最新 Cookie 已自动加密写入 GitHub Actions Secrets，并已触发云端每日任务！");
           } else if (res.status === "expired" || res.returnCode === -1 || res.stage === 6) {
             clearInterval(pollTimer);
             document.getElementById("qrMask").style.display = "flex";
