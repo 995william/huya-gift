@@ -37,7 +37,7 @@ class TestReportLogic(unittest.TestCase):
             "version": "v2",
             "nick": "狂鸟丶楚河-90327",
             "room_id": "998",
-            "account": "18579071857",
+            "account": "13800000000",
             "all_success": True,
             "fans_level": "Lv.22",
             "badge_name": "楚河",
@@ -75,7 +75,7 @@ class TestReportLogic(unittest.TestCase):
             "version": "v2",
             "nick": "狂鸟丶楚河-90327",
             "room_id": "998",
-            "account": "18579071857",
+            "account": "13800000000",
             "all_success": True,
             "fans_level": "Lv.22",
             "badge_name": "楚河",
@@ -109,7 +109,7 @@ class TestReportLogic(unittest.TestCase):
         from unittest.mock import MagicMock
         from core.mobile_bot import HuyaMobileBotV2
 
-        bot = HuyaMobileBotV2({"COOKIE": "yyuid=123; udb_uid=123", "ACCOUNT": "18579071857"})
+        bot = HuyaMobileBotV2({"COOKIE": "yyuid=123; udb_uid=123", "ACCOUNT": "13800000000"})
         bot.ensure_logged_in = MagicMock(return_value=True)
         bot.mobile_punch_card = MagicMock(return_value={
             "success": True, "status": "打卡成功", "detail": "打卡成功（亲密度+5）", "intimacy": 5
@@ -158,7 +158,7 @@ class TestReportLogic(unittest.TestCase):
         from unittest.mock import MagicMock
         from core.web_bot import HuyaWebBotV1
 
-        bot = HuyaWebBotV1({"COOKIE": "yyuid=123", "ACCOUNT": "18579071857"})
+        bot = HuyaWebBotV1({"COOKIE": "yyuid=123", "ACCOUNT": "13800000000"})
         bot.ensure_logged_in = MagicMock(return_value=True)
         bot.web_punch_card = MagicMock(return_value={
             "success": True, "status": "打卡成功", "detail": "网页端打卡成功（亲密度+5）", "intimacy": 5,

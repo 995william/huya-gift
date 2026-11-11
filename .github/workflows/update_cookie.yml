@@ -1,0 +1,54 @@
+name: 自动更新 Cookie 并执行验证签到
+
+on:
+  repository_dispatch:
+    types: [update_cookie]
+  workflow_dispatch:
+    inputs:
+      cookie:
+        description: '虎牙最新登录 Cookie'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync_cookie_job:
+    name: 同步最新 Cookie 并在云端验证
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pynacl requests
+
+      - name: 写入最新 Secret 凭据
+        env:
+          NEW_COOKIE: ${{ github.event.client_payload.cookie || inputs.cookie }}
+          GH_PAT: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/sync_cookie_secret.py
+
+      - name: 执行即时签到与验证任务 (送1粮)
+        env:
+          HUYA_VERSION: "v2"
+          HUYA_ROOM_URL: ${{ vars.HUYA_ROOM_URL || secrets.HUYA_ROOM_URL || '' }}
+          HUYA_GIFT_COUNT: "1"
+          HUYA_DAKA: "true"
+          HUYA_WELFARE: "true"
+          HUYA_WECHAT_PUSH: "true"
+          HUYA_LOCAL_DEBUG: "false"
+          HUYA_COOKIE: ${{ github.event.client_payload.cookie || inputs.cookie }}
+          WX_WEBHOOK: ${{ secrets.WX_WEBHOOK }}
+        run: python main.py

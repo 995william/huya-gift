@@ -9,3 +9,4 @@ screenshots/
 .idea/
 .vscode/
 .venv/
+scripts/deploy_worker.py
