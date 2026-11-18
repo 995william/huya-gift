@@ -44,7 +44,8 @@ DEFAULT_CONFIG = {
     "COOKIE_FILE": os.getenv("HUYA_COOKIE_FILE", "huya_cookie.txt").strip(),
     "HEADLESS": os.getenv("HEADLESS", "true").lower() in ("true", "1", "yes"),
     "DO_DAKA": os.getenv("HUYA_DAKA", "true").lower() in ("true", "1", "yes"),
-    "WECHAT_PUSH": os.getenv("HUYA_WECHAT_PUSH", "true").lower() in ("true", "1", "yes"),
+    "WECHAT_PUSH": os.getenv("HUYA_WECHAT_PUSH", "true").lower() in ("auto", "true", "1", "yes", "on"),
+    "FORCE_WECHAT_PUSH": os.getenv("HUYA_FORCE_WECHAT_PUSH", "").lower() in ("true", "1", "yes", "on"),
     "WX_WEBHOOK": os.getenv("WX_WEBHOOK", "").strip(),
 }
 
@@ -505,6 +506,7 @@ def run(args=None) -> dict:
             "ROOM_URL": getattr(args, "room", None) or config["ROOM_URL"],
             "DO_DAKA": getattr(args, "do_daka", not getattr(args, "no_daka", False)),
             "WECHAT_PUSH": getattr(args, "wechat_push", config["WECHAT_PUSH"]),
+            "FORCE_WECHAT_PUSH": getattr(args, "force_wechat_push", config.get("FORCE_WECHAT_PUSH", False)),
             "HEADLESS": not getattr(args, "local_debug", getattr(args, "headful", False)),
             "ACCOUNT": getattr(args, "account", config["ACCOUNT"]),
             "PASSWORD": getattr(args, "password", config["PASSWORD"]),

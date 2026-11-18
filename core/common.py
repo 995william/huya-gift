@@ -307,13 +307,31 @@ def write_github_summary(title: str, text_content: str) -> None:
 def push_wecom_message(summary: Dict[str, Any], config: Dict[str, Any]) -> None:
     """统一向企业微信群机器人 Webhook 及 Actions Summary 推送执行报告."""
     text_content = build_report_text(summary)
+    masked_summary = {
+        **summary,
+        "account": mask_account(summary.get("account", "")) if summary.get("account") else "",
+    }
+    public_text_content = build_report_text(masked_summary)
 
-    # 1. 写入 GitHub Actions 页面报告
-    write_github_summary("虎牙每日助手 · 执行报告", text_content)
+    # 1. 写入 GitHub Actions 页面报告（账号已脱敏）
+    write_github_summary("虎牙每日助手 · 执行报告", public_text_content)
+
+    # 2. 判断是否由管控中枢静默托管单仓推送
+    hub_managed = os.getenv("HUB_MANAGED_NOTIFY", "").strip().lower() == "true"
+    force_push = bool(config.get("FORCE_WECHAT_PUSH")) or os.getenv(
+        "HUYA_FORCE_WECHAT_PUSH", ""
+    ).strip().lower() in ("1", "true", "yes", "on")
+    if hub_managed and summary.get("all_success", False) and not force_push:
+        log(
+            "Common",
+            "INFO",
+            "当前由管控中枢托管通知 (HUB_MANAGED_NOTIFY=true)，全部任务成功，跳过单仓企微直推（交由中枢汇总早报）。",
+        )
+        return
 
     ctx = ssl.create_default_context()
 
-    # 2. 企业微信 Webhook 机器人推送
+    # 3. 企业微信 Webhook 机器人推送
     webhook_url = config.get("WX_WEBHOOK")
     if webhook_url:
         try:

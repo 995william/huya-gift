@@ -57,7 +57,8 @@ DEFAULT_CONFIG = {
     "COOKIE_FILE": os.getenv("HUYA_COOKIE_FILE", "huya_cookie.txt").strip(),
     "DO_DAKA": os.getenv("HUYA_DAKA", "true").lower() in ("true", "1", "yes"),
     "DO_WELFARE": os.getenv("HUYA_WELFARE", "true").lower() in ("true", "1", "yes"),
-    "WECHAT_PUSH": os.getenv("HUYA_WECHAT_PUSH", "true").lower() in ("true", "1", "yes"),
+    "WECHAT_PUSH": os.getenv("HUYA_WECHAT_PUSH", "true").lower() in ("auto", "true", "1", "yes", "on"),
+    "FORCE_WECHAT_PUSH": os.getenv("HUYA_FORCE_WECHAT_PUSH", "").lower() in ("true", "1", "yes", "on"),
     "WX_WEBHOOK": os.getenv("WX_WEBHOOK", "").strip(),
 }
 
@@ -451,7 +452,7 @@ class HuyaMobileBotV2:
                 # 勋章查询接口无需鉴权，不能用于判断登录态；905 即 UserId/Cookie 鉴权失败
                 hint = (
                     "网关返回 905（UserId/Cookie 鉴权失败），HUYA_COOKIE 已失效，"
-                    "请运行 tools/get_cookie.py 重新获取并更新 Secret"
+                    "请前往 https://checkin.wwcoder.top 扫码续签或运行 tools/get_cookie.py 更新 Secret"
                     if inventory.signal_code == "905"
                     else "Cookie 可能已过期失效"
                 )
@@ -834,6 +835,7 @@ def run(args=None) -> dict:
             "DO_DAKA": getattr(args, "do_daka", not getattr(args, "no_daka", False)),
             "DO_WELFARE": getattr(args, "do_welfare", not getattr(args, "no_welfare", False)),
             "WECHAT_PUSH": getattr(args, "wechat_push", config["WECHAT_PUSH"]),
+            "FORCE_WECHAT_PUSH": getattr(args, "force_wechat_push", config.get("FORCE_WECHAT_PUSH", False)),
             "ACCOUNT": getattr(args, "account", config["ACCOUNT"]),
             "COOKIE": getattr(args, "cookie", config["COOKIE"]),
             "COOKIE_FILE": getattr(args, "cookie_file", config["COOKIE_FILE"]),
