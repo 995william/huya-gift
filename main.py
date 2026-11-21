@@ -54,7 +54,7 @@ def env_int(name: str, default: int) -> int:
 USER_CONFIG = {
     "version": "v2",  # 启用版本：v1 网页端，v2 移动端协议版
     "count": 0,  # 每次赠送虎粮数量；0 表示送出包裹内全部虎粮
-    "room": "",  # 目标主播直播间地址；建议通过环境变量 HUYA_ROOM_URL 或 --room 传入
+    "room": "https://www.huya.com/998",  # 目标主播直播间地址（默认楚河 998，可通过环境变量 HUYA_ROOM_URL 或 --room 覆盖）
     "do_daka": True,  # 是否执行每日粉丝团打卡
     "do_welfare": True,  # 是否领取移动端每日 10 虎粮
     "wechat_push": True,  # 是否推送企业微信执行报告
